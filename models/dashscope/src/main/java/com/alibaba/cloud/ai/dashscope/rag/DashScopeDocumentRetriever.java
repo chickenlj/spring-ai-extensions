@@ -47,8 +47,8 @@ public class DashScopeDocumentRetriever implements DocumentRetriever {
 		if (pipelineId == null) {
 			throw new DashScopeException("Index:" + options.getIndexName() + " NotExist");
 		}
-		List<Document> documentList = dashScopeApi.retriever(pipelineId, query.text(), options);
-		return documentList;
+        List<Document> documentList = dashScopeApi.retriever(pipelineId, query, options);
+        return documentList;
 	}
 
 }

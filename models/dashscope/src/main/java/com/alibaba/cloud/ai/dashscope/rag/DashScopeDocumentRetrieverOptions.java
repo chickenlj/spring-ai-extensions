@@ -15,6 +15,8 @@
  */
 package com.alibaba.cloud.ai.dashscope.rag;
 
+import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
+import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
@@ -46,6 +48,8 @@ public class DashScopeDocumentRetrieverOptions {
   private @JsonProperty("rerank_top_n") int rerankTopN = 5;
 
   private @JsonProperty("search_filters") List<Map<String, Object>> searchFilters;
+
+  private @JsonProperty("query_history") List<DashScopeApiSpec.DocumentRetrieveRequest.QueryHistory> queryHistory;
 
   public static DashScopeDocumentRetrieverOptions.Builder builder() {
     return new DashScopeDocumentRetrieverOptions.Builder();
@@ -130,6 +134,14 @@ public class DashScopeDocumentRetrieverOptions {
   public List<Map<String, Object>> getSearchFilters() {
     return searchFilters;
   }
+
+    public void setQueryHistory(List<DashScopeApiSpec.DocumentRetrieveRequest.QueryHistory> queryHistory) {
+        this.queryHistory = queryHistory;
+    }
+
+    public List<DashScopeApiSpec.DocumentRetrieveRequest.QueryHistory> getQueryHistory() {
+        return queryHistory;
+    }
 
   public static class Builder {
 
@@ -239,6 +251,12 @@ public class DashScopeDocumentRetrieverOptions {
     public Builder withSearchFilters(List<Map<String, Object>> searchFilters) {
       return searchFilters(searchFilters);
     }
+
+      public DashScopeDocumentRetrieverOptions.Builder withQueryHistory(
+              List<DashScopeApiSpec.DocumentRetrieveRequest.QueryHistory> queryHistory) {
+          this.options.setQueryHistory(queryHistory);
+          return this;
+      }
 
     public DashScopeDocumentRetrieverOptions build() {
       return this.options;

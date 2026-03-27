@@ -428,10 +428,14 @@ public class DashScopeApiSpec {
                                           @JsonProperty("enable_reranking") boolean enableReranking,
                                           @JsonProperty("rerank") List<DocumentRetrieveModelConfig> rerank,
                                           @JsonProperty("rerank_min_score") float rerankMinScore, @JsonProperty("rerank_top_n") int rerankTopN,
-                                          @JsonProperty("search_filters") List<Map<String, Object>> searchFilters) {
+                                          @JsonProperty("search_filters") List<Map<String, Object>> searchFilters,
+                                          @JsonProperty("query_history") List<QueryHistory> queryHistory) {
         @JsonInclude(JsonInclude.Include.NON_NULL)
         public record DocumentRetrieveModelConfig(@JsonProperty("model_name") String modelName,
                                                   @JsonProperty("class_name") String className) {
+        }
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        public record QueryHistory(@JsonProperty("role") String role, @JsonProperty("content") String content) {
         }
     }
 

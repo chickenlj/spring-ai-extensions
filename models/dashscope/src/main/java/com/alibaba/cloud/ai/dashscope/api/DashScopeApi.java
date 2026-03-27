@@ -21,16 +21,20 @@ import com.alibaba.cloud.ai.dashscope.rag.DashScopeDocumentRetrieverOptions;
 import com.alibaba.cloud.ai.dashscope.rag.DashScopeDocumentTransformerOptions;
 import com.alibaba.cloud.ai.dashscope.rag.DashScopeStoreOptions;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec;
+import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.DocumentRetrieveRequest;
+import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.DocumentRetrieveResponse;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeModel;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.model.ApiKey;
 import org.springframework.ai.model.ModelOptionsUtils;
 import org.springframework.ai.model.NoopApiKey;
 import org.springframework.ai.model.SimpleApiKey;
+import org.springframework.ai.rag.Query;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.InputStreamResource;
@@ -453,39 +457,105 @@ public class DashScopeApi {
 		return true;
 	}
 
-	public List<Document> retriever(String pipelineId, String query, DashScopeDocumentRetrieverOptions searchOption) {
-		DashScopeApiSpec.DocumentRetrieveRequest request = new DashScopeApiSpec.DocumentRetrieveRequest(query, searchOption.getDenseSimilarityTopK(),
-				searchOption.getDenseSimilarityTopK(), searchOption.isEnableRewrite(),
-                List.of(new DashScopeApiSpec.DocumentRetrieveRequest.DocumentRetrieveModelConfig(
-                        searchOption.getRewriteModelName(), "DashScopeTextRewrite")),
-				searchOption.isEnableReranking(),
-                List.of(new DashScopeApiSpec.DocumentRetrieveRequest.DocumentRetrieveModelConfig(searchOption.getRerankModelName(),
+    @Deprecated
+    public List<Document> retriever(String pipelineId, String query, DashScopeDocumentRetrieverOptions searchOption) {
+        DocumentRetrieveRequest request = new DocumentRetrieveRequest(query, searchOption.getDenseSimilarityTopK(),
+                searchOption.getDenseSimilarityTopK(), searchOption.isEnableRewrite(),
+                Arrays
+                        .asList(new DocumentRetrieveRequest.DocumentRetrieveModelConfig(
+                                searchOption.getRewriteModelName(), "DashScopeTextRewrite")),
+                searchOption.isEnableReranking(),
+                Arrays.asList(new DocumentRetrieveRequest.DocumentRetrieveModelConfig(searchOption.getRerankModelName(),
                         null)),
-				searchOption.getRerankMinScore(), searchOption.getRerankTopN(), searchOption.getSearchFilters());
-		ResponseEntity<DashScopeApiSpec.DocumentRetrieveResponse> deleDocumentResponse = this.restClient.post()
-			.uri(RETRIEVE_PIPELINE_RESTFUL_URL, pipelineId)
-			.body(request)
-			.retrieve()
-			.toEntity(DashScopeApiSpec.DocumentRetrieveResponse.class);
-		if (deleDocumentResponse == null || deleDocumentResponse.getBody() == null
-				|| !"SUCCESS".equalsIgnoreCase(deleDocumentResponse.getBody().code())) {
-			throw new DashScopeException(ErrorCodeEnum.RETRIEVER_DOCUMENT_ERROR);
-		}
-		List<DashScopeApiSpec.DocumentRetrieveResponse.DocumentRetrieveResponseNode> nodeList = deleDocumentResponse.getBody().nodes();
-		if (nodeList == null || nodeList.isEmpty()) {
-			return new ArrayList<>();
-		}
-		List<Document> documents = new ArrayList<>();
-		nodeList.forEach(e -> {
-			DashScopeApiSpec.DocumentRetrieveResponse.DocumentRetrieveResponseNodeData nodeData = e.node();
-			Document toDocument = new Document(nodeData.id(), nodeData.text(), nodeData.metadata());
-			documents.add(toDocument);
-		});
-		return documents;
-	}
+                searchOption.getRerankMinScore(), searchOption.getRerankTopN(), searchOption.getSearchFilters(),
+                searchOption.getQueryHistory());
+        ResponseEntity<DocumentRetrieveResponse> deleDocumentResponse = this.restClient.post()
+                .uri("/api/v1/indices/pipeline/{pipeline_id}/retrieve", pipelineId)
+                .body(request)
+                .retrieve()
+                .toEntity(DocumentRetrieveResponse.class);
+        if (deleDocumentResponse == null || deleDocumentResponse.getBody() == null
+                || !"SUCCESS".equalsIgnoreCase(deleDocumentResponse.getBody().code())) {
+            throw new DashScopeException(ErrorCodeEnum.RETRIEVER_DOCUMENT_ERROR);
+        }
+        List<DocumentRetrieveResponse.DocumentRetrieveResponseNode> nodeList = deleDocumentResponse.getBody().nodes();
+        if (nodeList == null || nodeList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Document> documents = new ArrayList<>();
+        nodeList.forEach(e -> {
+            DocumentRetrieveResponse.DocumentRetrieveResponseNodeData nodeData = e.node();
+            Document toDocument = new Document(nodeData.id(), nodeData.text(), nodeData.metadata());
+            documents.add(toDocument);
+        });
+        return documents;
+    }
+
+    /**
+     * Retrieves documents using a Spring AI Query object. The query history is
+     * prioritized from Query metadata (key: "history"), falling back to
+     * searchOption.getQueryHistory() if null.
+     * @param pipelineId The pipeline ID
+     * @param query The org.springframework.ai.rag.Query object containing query text and
+     * optional metadata
+     * @param searchOption The retrieval options
+     * @return List of retrieved documents
+     */
+    public List<Document> retriever(String pipelineId, Query query, DashScopeDocumentRetrieverOptions searchOption) {
+        // Priority: use query.history() if present, otherwise use
+        // searchOption.getQueryHistory()
+        List<DocumentRetrieveRequest.QueryHistory> queryHistory = null;
+
+        // Try to get history from query.history() and convert Message list to
+        // QueryHistory list
+        if (!query.history().isEmpty()) {
+            queryHistory = new ArrayList<>();
+            for (Message message : query.history()) {
+                queryHistory.add(new DocumentRetrieveRequest.QueryHistory(message.getMessageType().getValue(),
+                        message.getText()));
+            }
+        }
+
+        // Fallback to searchOption if history is still null or empty
+        if (queryHistory == null) {
+            queryHistory = searchOption.getQueryHistory();
+        }
+
+        DocumentRetrieveRequest request = new DocumentRetrieveRequest(query.text(),
+                searchOption.getDenseSimilarityTopK(), searchOption.getDenseSimilarityTopK(),
+                searchOption.isEnableRewrite(),
+                Arrays
+                        .asList(new DocumentRetrieveRequest.DocumentRetrieveModelConfig(
+                                searchOption.getRewriteModelName(), "DashScopeTextRewrite")),
+                searchOption.isEnableReranking(),
+                Arrays.asList(new DocumentRetrieveRequest.DocumentRetrieveModelConfig(searchOption.getRerankModelName(),
+                        null)),
+                searchOption.getRerankMinScore(), searchOption.getRerankTopN(), searchOption.getSearchFilters(),
+                queryHistory);
+        ResponseEntity<DocumentRetrieveResponse> deleDocumentResponse = this.restClient.post()
+                .uri("/api/v1/indices/pipeline/{pipeline_id}/retrieve", pipelineId)
+                .body(request)
+                .retrieve()
+                .toEntity(DocumentRetrieveResponse.class);
+        if (deleDocumentResponse == null || deleDocumentResponse.getBody() == null
+                || !"SUCCESS".equalsIgnoreCase(deleDocumentResponse.getBody().code())) {
+            throw new DashScopeException(ErrorCodeEnum.RETRIEVER_DOCUMENT_ERROR);
+        }
+        List<DocumentRetrieveResponse.DocumentRetrieveResponseNode> nodeList = deleDocumentResponse.getBody().nodes();
+        if (nodeList == null || nodeList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Document> documents = new ArrayList<>();
+        nodeList.forEach(e -> {
+            DocumentRetrieveResponse.DocumentRetrieveResponseNodeData nodeData = e.node();
+            Document toDocument = new Document(nodeData.id(), nodeData.text(), nodeData.metadata());
+            documents.add(toDocument);
+        });
+        return documents;
+    }
 
 
-	public static String getTextContent(List<DashScopeApiSpec.ChatCompletionMessage.MediaContent> content) {
+    public static String getTextContent(List<DashScopeApiSpec.ChatCompletionMessage.MediaContent> content) {
 		return content.stream()
 			.filter(c -> "text".equals(c.type()))
 			.map(DashScopeApiSpec.ChatCompletionMessage.MediaContent::text)
