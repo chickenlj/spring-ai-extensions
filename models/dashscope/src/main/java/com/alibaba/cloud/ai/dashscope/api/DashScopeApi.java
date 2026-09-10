@@ -84,7 +84,6 @@ import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.ENABLE
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.HEADER_SSE;
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.HEADER_WORK_SPACE_ID;
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.MULTIMODAL_GENERATION_RESTFUL_URL;
-import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.RETRIEVE_PIPELINE_RESTFUL_URL;
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.TEXT_EMBEDDING_RESTFUL_URL;
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.TEXT_GENERATION_RESTFUL_URL;
 import static com.alibaba.cloud.ai.dashscope.common.DashScopeApiConstants.TEXT_RERANK_RESTFUL_URL;
@@ -202,6 +201,10 @@ public class DashScopeApi {
 				.baseUrl(baseUrl)
 				.defaultHeaders(finalHeaders)
 				.defaultStatusHandler(responseErrorHandler)
+				.requestInterceptors(interceptors -> {
+					interceptors.removeIf(BailianRequestIdLoggingInterceptor.class::isInstance);
+					interceptors.add(new BailianRequestIdLoggingInterceptor());
+				})
 				.build();
 
 		this.webClient = webClientBuilder.clone()
